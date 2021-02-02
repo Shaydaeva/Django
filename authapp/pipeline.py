@@ -1,12 +1,14 @@
 import datetime
 from collections import OrderedDict
 from urllib.parse import urlunparse, urlencode
+import urllib.request
 
 import requests
 from django.utils import timezone
 from social_core.exceptions import AuthForbidden
 
 from authapp.models import ShopUserProfile
+from django_project.settings import BASE_DIR
 
 
 def save_user_profile(backend, user, response, *args, **kwargs):
@@ -20,7 +22,7 @@ def save_user_profile(backend, user, response, *args, **kwargs):
                           '/method/users.get',
                           None,
                           urlencode(OrderedDict(fields=','.join(('bdate', 'sex',
-                                                                 'about', 'email')),
+                                                                 'about', 'photo_max')),
                                                 access_token=response['access_token'],
                                                 v='5.92')),
 
@@ -33,6 +35,7 @@ def save_user_profile(backend, user, response, *args, **kwargs):
         return
 
     data = resp.json()['response'][0]
+    data['email'] = response['email']
 
     if data['sex']:
         if data['sex'] == 2:
@@ -51,4 +54,12 @@ def save_user_profile(backend, user, response, *args, **kwargs):
             user.delete()
             raise AuthForbidden('social_core.backends.vk.VKOAuth2')
 
+    if data['email']:
+        user.shopuserprofile.user.email = data['email']
+
+    if data['photo_max']:
+        urllib.request.urlretrieve(data['photo_max'], BASE_DIR + f'/media/users_avatars/{user.pk}.jpg')
+        user.avatar = f'users_avatars/{user.pk}.jpg'
+
     user.save()
+
